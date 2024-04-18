@@ -89,6 +89,7 @@ fn get_tickets(page_request: Json<PageRequest>) -> StdResult<JsonValue, Box<dyn 
     }
 }
 
+//获取数据库配置
 fn get_database_url(config_path: &str, key: &str) -> StdResult<String, Box<dyn Error>> {
     let contents = fs::read_to_string(config_path)?;
     contents
