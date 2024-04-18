@@ -7,6 +7,11 @@ use rocket_contrib::json::{Json, JsonValue};
 use mysql::*;
 use mysql::prelude::*;
 use chrono::{NaiveDateTime};
+use std::fs;
+use std::io::{self, ErrorKind};
+use std::error::Error;
+use std::result::Result as StdResult;  // 引入标准库的Result并重命名，避免冲突
+
 
 #[derive(Serialize, Deserialize)]
 struct PageRequest {
@@ -29,8 +34,9 @@ struct Ticket {
 }
 
 #[get("/", format = "json", data = "<page_request>")]
-fn get_tickets(page_request: Json<PageRequest>) -> JsonValue {
-    let url = "mysql://pete:rbd2529421840@144.91.79.134:3306/solottery";
+fn get_tickets(page_request: Json<PageRequest>) -> StdResult<JsonValue, Box<dyn Error>> {
+    let config_path = "Settings.ini";
+    let url = get_database_url(config_path, "database_url")?;
     let pool = Pool::new(url).unwrap();
     let mut conn = pool.get_conn().unwrap();
     let mut query = "SELECT * FROM ticket".to_string();
@@ -78,9 +84,26 @@ fn get_tickets(page_request: Json<PageRequest>) -> JsonValue {
             mint_time,
         },
     ) {
-        Ok(tickets) => json!({ "tickets": tickets }),
-        Err(_) => json!({ "error": "Failed to fetch tickets" }),
+        Ok(tickets) => Ok(json!({ "tickets": tickets })),
+        Err(_) => Err(Box::new(io::Error::new(ErrorKind::Other, "Failed to fetch tickets"))),
     }
+}
+
+fn get_database_url(config_path: &str, key: &str) -> StdResult<String, Box<dyn Error>> {
+    let contents = fs::read_to_string(config_path)?;
+    contents
+        .lines()
+        .find_map(|line| {
+            let mut parts = line.splitn(2, '=');
+            let current_key = parts.next()?.trim();
+            let value = parts.next()?.trim();
+            if current_key == key {
+                Some(value.to_string())
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| From::from(format!("Key `{}` not found in config", key)))
 }
 
 #[catch(404)]
